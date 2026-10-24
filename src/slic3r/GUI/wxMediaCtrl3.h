@@ -36,6 +36,8 @@ typedef wxImage PlayFrame;
 #endif
 
 class AVVideoDecoder;
+class wxFrame;
+class wxPanel;
 
 class wxMediaCtrl3 : public wxWindow, BambuLib
 {
@@ -50,6 +52,10 @@ public:
 #endif
 
     std::chrono::system_clock::time_point m_play_start_time;
+
+    void ToggleFullScreen();
+    void ExitFullScreen();
+    bool IsFullScreen() const { return m_fullscreen_frame != nullptr; }
 
     void Play();
 
@@ -87,6 +93,13 @@ protected:
     void OnRenderTimer(wxTimerEvent &evt);
 
 private:
+    void OnFullScreenParentDestroy(wxWindowDestroyEvent &evt);
+    wxFrame *m_fullscreen_frame = nullptr;
+    wxWindow *m_video_parent = nullptr;
+    wxPanel *m_video_placeholder = nullptr;
+    wxSize m_embedded_min_size;
+    wxSize m_embedded_max_size;
+
     wxString m_idle_image;
     wxString m_watermark_text;
     wxMediaState m_state  = wxMEDIASTATE_STOPPED;

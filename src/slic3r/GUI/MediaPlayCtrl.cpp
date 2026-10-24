@@ -26,6 +26,7 @@
 #endif
 
 #include <wx/clipbrd.h>
+#include <wx/button.h>
 #include "wx/evtloop.h"
 
 wxDEFINE_EVENT(EVT_MEDIA_CTRL_FIRST_FRAME, wxCommandEvent);
@@ -155,6 +156,10 @@ MediaPlayCtrl::MediaPlayCtrl(wxWindow *parent, BBLMediaCtrl *media_ctrl, const w
 
     wxBoxSizer * sizer = new wxBoxSizer(wxHORIZONTAL);
     sizer->Add(m_button_play, 0, wxEXPAND | wxALL, 0);
+    auto *fullscreen_button = new wxButton(this, wxID_ANY, _L("Full screen"));
+    fullscreen_button->SetToolTip(_L("Show the camera on the entire monitor. Press Esc to exit."));
+    fullscreen_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { m_media_ctrl->ToggleFullScreen(); });
+    sizer->Add(fullscreen_button, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(5));
     sizer->Add(m_label_stat, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(25));
     sizer->AddStretchSpacer(1);
     sizer->Add(m_label_status, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(25));
@@ -770,6 +775,8 @@ void MediaPlayCtrl::on_show_hide(wxShowEvent &evt)
     m_failed_retry = 0;
     if (m_next_retry.IsValid()) // Try open 2 seconds later, to avoid quick play/stop
         m_next_retry = wxDateTime::Now() + wxTimeSpan::Seconds(2);
+    if (!IsShownOnScreen())
+        m_media_ctrl->ExitFullScreen();
     IsShownOnScreen() ? Play() : Stop();
 }
 

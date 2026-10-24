@@ -3,6 +3,12 @@ name: Build Windows with Slicer Linux runtime
 on:
   workflow_call:
   workflow_dispatch:
+  push:
+    branches:
+      - camera-fullscreen
+
+permissions:
+  contents: read
 
 jobs:
   prepare_slicer_linux_runtime:
