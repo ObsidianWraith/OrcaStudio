@@ -6,6 +6,10 @@
 #include <boost/log/trivial.hpp>
 #include <wx/dcclient.h>
 #include <wx/dcgraph.h>
+#include <wx/frame.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/display.h>
 #ifdef __WIN32__
 #include <versionhelpers.h>
 #include <wx/msw/registry.h>
@@ -42,12 +46,15 @@ wxMediaCtrl3::wxMediaCtrl3(wxWindow *parent)
     , m_frame_buffer(9)
 {
     SetBackgroundColour("#000001ff");
+    SetToolTip(_L("Double-click to enter or leave full screen. Press Esc to exit."));
+    Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent &) { ToggleFullScreen(); });
     m_render_timer.SetOwner(this);
     Bind(wxEVT_TIMER, &wxMediaCtrl3::OnRenderTimer, this);
 }
 
 wxMediaCtrl3::~wxMediaCtrl3()
 {
+    ExitFullScreen();
     m_render_timer.Stop();
     {
         std::unique_lock<std::mutex> lk(m_ui_mutex);
@@ -64,6 +71,82 @@ wxMediaCtrl3::~wxMediaCtrl3()
     }
     m_thread.join();
     StaticBambuLib::remove(this);
+}
+
+// Move the existing player, preserving the active connection and decoder.
+void wxMediaCtrl3::ToggleFullScreen()
+{
+    if (IsFullScreen()) {
+        ExitFullScreen();
+        return;
+    }
+    auto *parent = GetParent();
+    auto *sizer = GetContainingSizer();
+    if (!parent || !sizer)
+        return;
+
+    auto *placeholder = new wxPanel(parent);
+    placeholder->SetMinSize(GetMinSize());
+    if (!sizer->Replace(this, placeholder)) {
+        placeholder->Destroy();
+        return;
+    }
+    m_video_parent = parent;
+    m_video_placeholder = placeholder;
+    m_embedded_min_size = GetMinSize();
+    m_embedded_max_size = GetMaxSize();
+    parent->Bind(wxEVT_DESTROY, &wxMediaCtrl3::OnFullScreenParentDestroy, this);
+
+    m_fullscreen_frame = new wxFrame(nullptr, wxID_ANY, _L("Camera - Esc to exit full screen"));
+    m_fullscreen_frame->SetBackgroundColour(*wxBLACK);
+    const int display = wxDisplay::GetFromWindow(this);
+    if (display != wxNOT_FOUND)
+        m_fullscreen_frame->SetSize(wxDisplay(display).GetGeometry());
+    Reparent(m_fullscreen_frame);
+    SetMinSize(wxDefaultSize);
+    SetMaxSize(wxDefaultSize);
+    auto *fullscreen_sizer = new wxBoxSizer(wxVERTICAL);
+    fullscreen_sizer->Add(this, 1, wxEXPAND);
+    m_fullscreen_frame->SetSizer(fullscreen_sizer);
+    m_fullscreen_frame->Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &evt) {
+        if (evt.GetKeyCode() == WXK_ESCAPE || evt.GetKeyCode() == WXK_F11)
+            ExitFullScreen();
+        else
+            evt.Skip();
+    });
+    m_fullscreen_frame->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent &) { ExitFullScreen(); });
+    parent->Layout();
+    m_fullscreen_frame->ShowFullScreen(true, wxFULLSCREEN_ALL);
+    m_fullscreen_frame->Layout();
+    SetFocus();
+}
+
+void wxMediaCtrl3::ExitFullScreen()
+{
+    if (!m_fullscreen_frame)
+        return;
+    auto *frame = m_fullscreen_frame;
+    m_fullscreen_frame = nullptr;
+    frame->GetSizer()->Detach(this);
+    Reparent(m_video_parent);
+    SetMinSize(m_embedded_min_size);
+    SetMaxSize(m_embedded_max_size);
+    if (auto *sizer = m_video_placeholder->GetContainingSizer())
+        sizer->Replace(m_video_placeholder, this);
+    m_video_placeholder->Destroy();
+    m_video_placeholder = nullptr;
+    m_video_parent->Unbind(wxEVT_DESTROY, &wxMediaCtrl3::OnFullScreenParentDestroy, this);
+    m_video_parent->Layout();
+    m_video_parent = nullptr;
+    frame->Destroy();
+    Refresh();
+}
+
+void wxMediaCtrl3::OnFullScreenParentDestroy(wxWindowDestroyEvent &evt)
+{
+    if (evt.GetEventObject() == m_video_parent)
+        ExitFullScreen();
+    evt.Skip();
 }
 
 void wxMediaCtrl3::Load(wxURI url, std::chrono::system_clock::time_point play_start_time)
@@ -267,7 +350,8 @@ void wxMediaCtrl3::DoSetSize(int x, int y, int width, int height, int sizeFlags)
 {
     wxWindow::DoSetSize(x, y, width, height, sizeFlags);
     if (sizeFlags == wxSIZE_USE_EXISTING) return;
-    wxMediaCtrl_OnSize(this, m_video_size, width, height);
+    if (!IsFullScreen())
+        wxMediaCtrl_OnSize(this, m_video_size, width, height);
     std::unique_lock<std::mutex> lk(m_mutex);
     adjust_frame_size(m_frame_size, m_video_size, GetSize());
     Refresh();
