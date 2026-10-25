@@ -27,6 +27,9 @@
 
 #include <wx/clipbrd.h>
 #include <wx/button.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+#include <nlohmann/json.hpp>
 #include "wx/evtloop.h"
 
 wxDEFINE_EVENT(EVT_MEDIA_CTRL_FIRST_FRAME, wxCommandEvent);
@@ -160,6 +163,40 @@ MediaPlayCtrl::MediaPlayCtrl(wxWindow *parent, BBLMediaCtrl *media_ctrl, const w
     fullscreen_button->SetToolTip(_L("Show the camera on the entire monitor. Press Esc to exit."));
     fullscreen_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { m_media_ctrl->ToggleFullScreen(); });
     sizer->Add(fullscreen_button, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(5));
+#ifdef __WIN32__
+    auto *popout_button = new wxButton(this, wxID_ANY, _L("Pop-out camera"));
+    popout_button->SetToolTip(_L("Open the P1P/P1S LAN camera in an independent viewer."));
+    popout_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+        if (m_lan_proto != MachineObject::LVL_Local || m_lan_ip.empty() || m_lan_passwd.empty()) {
+            wxMessageBox(_L("This viewer requires a P1P/P1S camera, a local IP address, and a LAN access code."), _L("Pop-out camera"));
+            return;
+        }
+        wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+        executable.SetFullName("OrcaCameraViewer.exe");
+        if (!executable.FileExists()) {
+            wxMessageBox(_L("OrcaCameraViewer.exe is missing. Extract the complete updated portable package."), _L("Pop-out camera"));
+            return;
+        }
+        try {
+            // Revision 002: credentials travel through an anonymous pipe, never command-line arguments.
+            boost::process::opstream input;
+            boost::process::child viewer(executable.GetFullPath().ToStdWstring(),
+                boost::process::std_in < input, boost::process::windows::create_no_window);
+            const nlohmann::json config = {{"Host", m_lan_ip}, {"AccessCode", m_lan_passwd}};
+            input << config.dump() << std::endl;
+            input.pipe().close();
+            viewer.detach();
+            m_external_viewer = true;
+            m_media_ctrl->ExitFullScreen();
+            Stop(_L("Camera opened in independent viewer."));
+            m_next_retry = wxDateTime();
+        } catch (const std::exception &) {
+            wxMessageBox(_L("Unable to start the camera viewer."), _L("Pop-out camera"));
+        }
+    });
+    sizer->Add(popout_button, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(5));
+#endif
+
     sizer->Add(m_label_stat, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(25));
     sizer->AddStretchSpacer(1);
     sizer->Add(m_label_status, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(25));
@@ -236,6 +273,7 @@ void MediaPlayCtrl::SetMachineObject(MachineObject* obj)
         }
         return;
     }
+    m_external_viewer = false;
     m_machine = machine;
     BOOST_LOG_TRIVIAL(info) << "MediaPlayCtrl switch machine: " << m_machine;
     m_disable_lan = false;
@@ -304,6 +342,7 @@ void refresh_agora_url(char const* device, char const* dev_ver, char const* chan
 
 void MediaPlayCtrl::Play()
 {
+    if (m_external_viewer) return;
     if (!m_next_retry.IsValid() || wxDateTime::Now() < m_next_retry)
         return;
     if (!IsShownOnScreen())
@@ -505,6 +544,7 @@ void MediaPlayCtrl::Stop(wxString const &msg, wxString const &msg2)
 
 void MediaPlayCtrl::TogglePlay()
 {
+    m_external_viewer = false;
     BOOST_LOG_TRIVIAL(info) << "MediaPlayCtrl::TogglePlay";
     if (m_last_state != MEDIASTATE_IDLE) {
         m_next_retry = wxDateTime();

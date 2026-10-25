@@ -99,6 +99,7 @@ private:
     boost::thread m_thread;
 
     bool m_streaming = false;
+    bool m_external_viewer = false;
     bool m_reload_barrier_done = false;
     bool m_user_triggered = false;
     int m_failed_retry = 0;
