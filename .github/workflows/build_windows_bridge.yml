@@ -227,6 +227,17 @@ jobs:
         run: .\build_release_vs.bat slicer
 
 
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build standalone P1P camera viewer
+        shell: pwsh
+        run: |
+          dotnet publish tools/p1p_camera_viewer/P1PCameraViewer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o camera-viewer
+          if ($LASTEXITCODE -ne 0) { throw "Camera viewer build failed" }
+          Copy-Item camera-viewer/OrcaCameraViewer.exe build/OrcaStudio/
+
       - name: Normalize Windows runtime shell scripts
         shell: pwsh
         run: |
