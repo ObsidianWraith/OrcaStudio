@@ -1,4 +1,6 @@
 #include "PrintHost.hpp"
+#include "WorkflowArchive.hpp"
+#include "libslic3r/Utils.hpp"
 
 #include <vector>
 #include <thread>
@@ -358,6 +360,9 @@ void PrintHostJobQueue::priv::perform_job(PrintHostJob the_job)
 {
     emit_progress(0);   // Indicate the upload is starting
 
+    const auto archive_source = the_job.upload_data.source_path;
+    const auto archive_name = the_job.upload_data.upload_path.string();
+    const auto archive_printer = the_job.printhost->get_name();
     bool success = the_job.printhost->upload(std::move(the_job.upload_data),
         [this](Http::Progress progress, bool &cancel)   { this->progress_fn(std::move(progress), cancel); },
         [this](wxString error)                          { this->error_fn(std::move(error)); },
@@ -365,6 +370,9 @@ void PrintHostJobQueue::priv::perform_job(PrintHostJob the_job)
     );
 
     if (success) {
+        if (!WorkflowArchive::save(std::filesystem::u8path(data_dir()) / "print_archive",
+                std::filesystem::u8path(archive_source.string()), archive_printer, archive_name))
+            BOOST_LOG_TRIVIAL(debug) << "Print archive disabled or copy unavailable";
         emit_progress(100);
         if (the_job.switch_to_device_tab) {
             const auto mainframe = GUI::wxGetApp().mainframe;

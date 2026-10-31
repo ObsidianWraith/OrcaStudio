@@ -180,7 +180,7 @@ MediaPlayCtrl::MediaPlayCtrl(wxWindow *parent, BBLMediaCtrl *media_ctrl, const w
         try {
             // Revision 002: credentials travel through an anonymous pipe, never command-line arguments.
             boost::process::opstream input;
-            boost::process::child viewer(executable.GetFullPath().ToStdWstring(),
+            boost::process::child viewer(executable.GetFullPath().ToStdWstring(), L"--stdin",
                 boost::process::std_in < input, boost::process::windows::create_no_window);
             const nlohmann::json config = {{"Host", m_lan_ip}, {"AccessCode", m_lan_passwd}};
             input << config.dump() << std::endl;

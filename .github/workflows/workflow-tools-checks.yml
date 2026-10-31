@@ -1,0 +1,40 @@
+name: Workflow tools checks
+on:
+  push:
+    branches: [camera-fullscreen]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: false
+      - name: Check archive and slice summary
+        shell: bash
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -I. -Ideps_src tools/workflow_tests/check.cpp -o workflow-check
+          ./workflow-check
+  viewer:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish standalone camera viewer
+        shell: pwsh
+        run: |
+          dotnet publish tools/p1p_camera_viewer/P1PCameraViewer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o camera-viewer
+          if ($LASTEXITCODE -ne 0) { throw 'Viewer build failed' }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OrcaCameraViewer-rev003-Windows
+          path: camera-viewer/OrcaCameraViewer.exe

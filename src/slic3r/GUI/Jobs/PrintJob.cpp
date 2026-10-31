@@ -1,4 +1,6 @@
 #include "PrintJob.hpp"
+#include "slic3r/Utils/WorkflowArchive.hpp"
+#include "libslic3r/Utils.hpp"
 #include "libslic3r/MTUtils.hpp"
 #include "libslic3r/Model.hpp"
 #include "libslic3r/PresetBundle.hpp"
@@ -694,6 +696,9 @@ void PrintJob::process(Ctl &ctl)
 
         BOOST_LOG_TRIVIAL(error) << "print_job: failed, result = " << result;
     } else {
+        if (!WorkflowArchive::save(std::filesystem::u8path(data_dir()) / "print_archive",
+                std::filesystem::u8path(params.filename), m_dev_id, params.project_name))
+            BOOST_LOG_TRIVIAL(debug) << "Print archive disabled or copy unavailable";
         // wait for printer mqtt ready the same job id
 
         wxGetApp().plater()->record_slice_preset("print");
