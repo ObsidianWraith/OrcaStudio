@@ -1,4 +1,5 @@
 #include "MainFrame.hpp"
+#include "WorkflowTools.hpp"
 
 #include <wx/panel.h>
 #include <wx/notebook.h>
@@ -2737,6 +2738,8 @@ void MainFrame::init_menubar_as_editor()
         fileMenu->AppendSeparator();
 
         // BBS
+        WorkflowTools::add_menu(fileMenu, this);
+
         wxMenu *import_menu = new wxMenu();
 #ifndef __APPLE__
         append_menu_item(import_menu, wxID_ANY, _L("Import 3MF/STL/STEP/SVG/OBJ/AMF") + dots + "\t" + ctrl + "I", _L("Load a model"),

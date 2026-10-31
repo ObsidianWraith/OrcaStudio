@@ -1242,8 +1242,18 @@ set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "OrcaStudio")
 set (CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
 set (CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
 # set (CPACK_NSIS_MODIFY_PATH "ON")
+if(WIN32)
+    # Published after the slicer build; include it explicitly when CPack runs.
+    install(FILES "${CMAKE_SOURCE_DIR}/camera-viewer/OrcaCameraViewer.exe" DESTINATION "." OPTIONAL)
+endif()
 set(CPACK_PACKAGE_EXECUTABLES "OrcaStudio;OrcaStudio")
+if(WIN32)
+    list(APPEND CPACK_PACKAGE_EXECUTABLES "OrcaCameraViewer" "Orca Camera Viewer")
+endif()
 set(CPACK_CREATE_DESKTOP_LINKS "OrcaStudio")
+if(WIN32)
+    list(APPEND CPACK_CREATE_DESKTOP_LINKS "OrcaCameraViewer")
+endif()
 set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_SOURCE_DIR}/LICENSE.txt) # must also include in install command
 
 set(CPACK_WIX_UPGRADE_GUID "058245e8-20e0-4a95-9ab7-1acfe17ad511")
